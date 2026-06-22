@@ -655,23 +655,51 @@ async function reverseGeocode(lat,lng){
   }catch{return "Your location";}
 }
 
+// Geocode via Places (New) text search — CORS-friendly
 async function geocodeAddress(address){
-  const r=await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_API_KEY}`);
+  const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY,"X-Goog-FieldMask":"places.location,places.formattedAddress,places.displayName"},
+    body:JSON.stringify({textQuery:address})
+  });
   const d=await r.json();
-  if(d.status!=="OK")throw new Error("Address not found");
-  return {lat:d.results[0].geometry.location.lat,lng:d.results[0].geometry.location.lng,formatted:d.results[0].formatted_address};
+  if(d.error)throw new Error(d.error.message);
+  if(!d.places||d.places.length===0)throw new Error("Address not found");
+  const p=d.places[0];
+  return{lat:p.location.latitude,lng:p.location.longitude,formatted:p.formattedAddress||p.displayName?.text||address};
 }
 
+// Directions via Routes API (New) — CORS-friendly, returns turn-by-turn
 async function getDirections(originLat,originLng,destLat,destLng){
-  const r=await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${originLat},${originLng}&destination=${destLat},${destLng}&key=${GOOGLE_API_KEY}`);
+  const r=await fetch("https://routes.googleapis.com/directions/v2:computeRoutes",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY,"X-Goog-FieldMask":"routes.distanceMeters,routes.duration,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration"},
+    body:JSON.stringify({
+      origin:{location:{latLng:{latitude:originLat,longitude:originLng}}},
+      destination:{location:{latLng:{latitude:destLat,longitude:destLng}}},
+      travelMode:"DRIVE",
+      routingPreference:"TRAFFIC_AWARE"
+    })
+  });
   const d=await r.json();
-  if(d.status!=="OK")throw new Error("Route not found");
-  const leg=d.routes[0].legs[0];
-  return{
-    totalMiles:+(leg.distance.value*0.000621371).toFixed(1),
-    totalTime:leg.duration.text,
-    steps:leg.steps.map(s=>({instruction:s.html_instructions.replace(/<[^>]+>/g,""),distance:s.distance.text,duration:s.duration.text,lat:s.end_location.lat,lng:s.end_location.lng}))
-  };
+  if(d.error)throw new Error(d.error.message);
+  if(!d.routes||d.routes.length===0)throw new Error("No route found");
+  const route=d.routes[0];
+  const totalMiles=+(route.distanceMeters*0.000621371).toFixed(1);
+  const durSec=parseInt(route.duration?.replace("s","")||"0");
+  const hrs=Math.floor(durSec/3600),mins=Math.round((durSec%3600)/60);
+  const totalTime=hrs>0?`${hrs}h ${mins}m`:`${mins} min`;
+  const steps=[];
+  (route.legs||[]).forEach(leg=>{
+    (leg.steps||[]).forEach(s=>{
+      const instr=s.navigationInstruction?.instructions||"Continue";
+      const distMi=(s.distanceMeters||0)*0.000621371;
+      const sSec=parseInt(s.staticDuration?.replace("s","")||"0");
+      const sMin=Math.max(1,Math.round(sSec/60));
+      steps.push({instruction:instr,distance:distMi<0.1?`${Math.round(distMi*5280)} ft`:`${distMi.toFixed(1)} mi`,duration:`${sMin} min`});
+    });
+  });
+  return{totalMiles,totalTime,steps:steps.length>0?steps:[{instruction:"Head to destination",distance:`${totalMiles} mi`,duration:totalTime}]};
 }
 
 async function findNearbyStations(lat,lng){
@@ -810,15 +838,27 @@ export default function WiseRoute(){
     const[showSuggestions,setShowSuggestions]=useState(false);
     const debounceRef=useRef(null);
 
-    // Fetch autocomplete suggestions from Google Places Autocomplete
+    // Fetch autocomplete via Places Autocomplete (New) — CORS-friendly
     const fetchSuggestions=async(val)=>{
       if(!val||val.length<2){setSuggestions([]);return;}
       setSugLoading(true);
       try{
-        const bias=location?`&location=${location.lat},${location.lng}&radius=50000`:"";
-        const r=await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(val)}&types=geocode|establishment${bias}&key=${GOOGLE_API_KEY}`);
+        const body={input:val};
+        if(location){body.locationBias={circle:{center:{latitude:location.lat,longitude:location.lng},radius:50000}};}
+        const r=await fetch("https://places.googleapis.com/v1/places:autocomplete",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY},
+          body:JSON.stringify(body)
+        });
         const d=await r.json();
-        setSuggestions(d.predictions||[]);
+        const preds=(d.suggestions||[]).map(s=>({
+          description:s.placePrediction?.text?.text||"",
+          structured_formatting:{
+            main_text:s.placePrediction?.structuredFormat?.mainText?.text||s.placePrediction?.text?.text||"",
+            secondary_text:s.placePrediction?.structuredFormat?.secondaryText?.text||""
+          }
+        })).filter(p=>p.description);
+        setSuggestions(preds);
       }catch(e){setSuggestions([]);}
       setSugLoading(false);
     };
