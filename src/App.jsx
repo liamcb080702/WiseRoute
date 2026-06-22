@@ -7,65 +7,378 @@ const VEHICLE_DB = {
   "Ford": {
     "F-150": {
       "2024": [
-        { engine:"3.3L V6",         mpg:21, tank:26, fuel:"gasoline" },
-        { engine:"2.7L V6 EcoBoost",mpg:22, tank:26, fuel:"gasoline" },
-        { engine:"3.5L V6 EcoBoost",mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:18, tank:26, fuel:"gasoline" },
-        { engine:"3.5L PowerBoost Hybrid",mpg:25, tank:30, fuel:"hybrid" },
-        { engine:"Lightning Electric",mpg:null, tank:null, fuel:"electric" },
+        { engine:"3.3L V6",                   mpg:21, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:22, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:18, tank:26, fuel:"gasoline" },
+        { engine:"3.5L PowerBoost Hybrid",     mpg:25, tank:30, fuel:"hybrid"   },
+        { engine:"Lightning Electric",          mpg:null,tank:null,fuel:"electric"},
       ],
       "2023": [
-        { engine:"3.3L V6",         mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"2.7L V6 EcoBoost",mpg:22, tank:26, fuel:"gasoline" },
-        { engine:"3.5L V6 EcoBoost",mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:18, tank:26, fuel:"gasoline" },
-        { engine:"3.5L PowerBoost Hybrid",mpg:24, tank:30, fuel:"hybrid" },
+        { engine:"3.3L V6",                   mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:22, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:18, tank:26, fuel:"gasoline" },
+        { engine:"3.5L PowerBoost Hybrid",     mpg:24, tank:30, fuel:"hybrid"   },
       ],
       "2022": [
-        { engine:"3.3L V6",         mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"2.7L V6 EcoBoost",mpg:21, tank:26, fuel:"gasoline" },
-        { engine:"3.5L V6 EcoBoost",mpg:19, tank:26, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:17, tank:36, fuel:"gasoline" },
+        { engine:"3.3L V6",                   mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:21, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:19, tank:26, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:17, tank:36, fuel:"gasoline" },
       ],
       "2021": [
-        { engine:"3.3L V6",         mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"2.7L V6 EcoBoost",mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"3.5L V6 EcoBoost",mpg:18, tank:36, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:17, tank:36, fuel:"gasoline" },
+        { engine:"3.3L V6",                   mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:18, tank:36, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:17, tank:36, fuel:"gasoline" },
       ],
       "2020": [
-        { engine:"3.3L V6",         mpg:19, tank:26, fuel:"gasoline" },
-        { engine:"2.7L V6 EcoBoost",mpg:20, tank:26, fuel:"gasoline" },
-        { engine:"3.5L V6 EcoBoost",mpg:18, tank:36, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:16, tank:36, fuel:"gasoline" },
+        { engine:"3.3L V6",                   mpg:19, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:20, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:18, tank:36, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:16, tank:36, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"3.3L V6",                   mpg:19, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:19, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:17, tank:36, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:16, tank:36, fuel:"gasoline" },
+      ],
+      "2018": [
+        { engine:"3.3L V6",                   mpg:19, tank:26, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",           mpg:19, tank:26, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost",           mpg:17, tank:36, fuel:"gasoline" },
+        { engine:"5.0L V8",                    mpg:15, tank:36, fuel:"gasoline" },
+      ],
+    },
+    "F-250 Super Duty": {
+      "2024": [
+        { engine:"6.2L V8 Gas",               mpg:14, tank:34, fuel:"gasoline" },
+        { engine:"7.3L V8 Godzilla",           mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:18, tank:34, fuel:"diesel"   },
+      ],
+      "2023": [
+        { engine:"6.2L V8 Gas",               mpg:14, tank:34, fuel:"gasoline" },
+        { engine:"7.3L V8 Godzilla",           mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:18, tank:34, fuel:"diesel"   },
+      ],
+      "2022": [
+        { engine:"6.2L V8 Gas",               mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"7.3L V8 Godzilla",           mpg:12, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:17, tank:34, fuel:"diesel"   },
+      ],
+      "2021": [
+        { engine:"6.2L V8 Gas",               mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"7.3L V8 Godzilla",           mpg:12, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:17, tank:34, fuel:"diesel"   },
+      ],
+      "2020": [
+        { engine:"6.2L V8 Gas",               mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:17, tank:34, fuel:"diesel"   },
+      ],
+    },
+    "F-350 Super Duty": {
+      "2024": [
+        { engine:"6.2L V8 Gas",               mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"7.3L V8 Godzilla",           mpg:12, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:16, tank:34, fuel:"diesel"   },
+      ],
+      "2023": [
+        { engine:"6.2L V8 Gas",               mpg:13, tank:34, fuel:"gasoline" },
+        { engine:"7.3L V8 Godzilla",           mpg:12, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:16, tank:34, fuel:"diesel"   },
+      ],
+      "2022": [
+        { engine:"6.2L V8 Gas",               mpg:12, tank:34, fuel:"gasoline" },
+        { engine:"6.7L Power Stroke Diesel",   mpg:16, tank:34, fuel:"diesel"   },
       ],
     },
     "Mustang": {
       "2024": [
-        { engine:"2.3L EcoBoost",   mpg:27, tank:16, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:18, tank:16, fuel:"gasoline" },
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:27, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:18, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 GT500",             mpg:14, tank:16, fuel:"gasoline" },
       ],
       "2023": [
-        { engine:"2.3L EcoBoost",   mpg:26, tank:16, fuel:"gasoline" },
-        { engine:"5.0L V8",         mpg:18, tank:16, fuel:"gasoline" },
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:26, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:18, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 GT500",             mpg:14, tank:16, fuel:"gasoline" },
+      ],
+      "2022": [
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:26, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:17, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 GT500",             mpg:13, tank:16, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:25, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:17, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 GT500",             mpg:13, tank:16, fuel:"gasoline" },
+      ],
+      "2020": [
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:25, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:16, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 Shelby GT500",      mpg:13, tank:16, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:25, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:16, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 Shelby GT350",      mpg:14, tank:16, fuel:"gasoline" },
+      ],
+      "2018": [
+        { engine:"2.3L EcoBoost 4-Cyl",       mpg:24, tank:16, fuel:"gasoline" },
+        { engine:"5.0L V8 GT",                mpg:16, tank:16, fuel:"gasoline" },
+        { engine:"5.2L V8 Shelby GT350",      mpg:14, tank:16, fuel:"gasoline" },
       ],
     },
     "Explorer": {
       "2024": [
-        { engine:"2.3L EcoBoost",   mpg:24, tank:18, fuel:"gasoline" },
-        { engine:"3.0L V6 Hybrid",  mpg:27, tank:18, fuel:"hybrid"   },
+        { engine:"2.3L EcoBoost",             mpg:24, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 ST",                mpg:18, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 Hybrid",            mpg:27, tank:18, fuel:"hybrid"   },
       ],
       "2023": [
-        { engine:"2.3L EcoBoost",   mpg:24, tank:18, fuel:"gasoline" },
-        { engine:"3.0L V6 Hybrid",  mpg:27, tank:18, fuel:"hybrid"   },
+        { engine:"2.3L EcoBoost",             mpg:24, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 ST",                mpg:18, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 Hybrid",            mpg:27, tank:18, fuel:"hybrid"   },
+      ],
+      "2022": [
+        { engine:"2.3L EcoBoost",             mpg:24, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 ST",                mpg:18, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 Hybrid",            mpg:27, tank:18, fuel:"hybrid"   },
+      ],
+      "2021": [
+        { engine:"2.3L EcoBoost",             mpg:23, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 ST",                mpg:18, tank:18, fuel:"gasoline" },
+      ],
+      "2020": [
+        { engine:"2.3L EcoBoost",             mpg:23, tank:18, fuel:"gasoline" },
+        { engine:"3.0L V6 ST",                mpg:17, tank:18, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"2.3L EcoBoost",             mpg:22, tank:18, fuel:"gasoline" },
+        { engine:"3.5L V6",                   mpg:19, tank:18, fuel:"gasoline" },
       ],
     },
     "Ranger": {
       "2024": [
-        { engine:"2.3L EcoBoost",   mpg:22, tank:18, fuel:"gasoline" },
+        { engine:"2.3L EcoBoost",             mpg:22, tank:18, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost Raptor",   mpg:18, tank:18, fuel:"gasoline" },
       ],
       "2023": [
-        { engine:"2.3L EcoBoost",   mpg:22, tank:18, fuel:"gasoline" },
+        { engine:"2.3L EcoBoost",             mpg:22, tank:18, fuel:"gasoline" },
+      ],
+      "2022": [
+        { engine:"2.3L EcoBoost",             mpg:22, tank:18, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"2.3L EcoBoost",             mpg:21, tank:18, fuel:"gasoline" },
+      ],
+      "2020": [
+        { engine:"2.3L EcoBoost",             mpg:21, tank:18, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"2.3L EcoBoost",             mpg:21, tank:18, fuel:"gasoline" },
+      ],
+    },
+    "Expedition": {
+      "2024": [
+        { engine:"3.5L V6 EcoBoost",          mpg:17, tank:33, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost Hybrid",   mpg:22, tank:33, fuel:"hybrid"   },
+      ],
+      "2023": [
+        { engine:"3.5L V6 EcoBoost",          mpg:17, tank:33, fuel:"gasoline" },
+        { engine:"3.5L V6 EcoBoost Hybrid",   mpg:22, tank:33, fuel:"hybrid"   },
+      ],
+      "2022": [
+        { engine:"3.5L V6 EcoBoost",          mpg:17, tank:33, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"3.5L V6 EcoBoost",          mpg:16, tank:33, fuel:"gasoline" },
+      ],
+      "2020": [
+        { engine:"3.5L V6 EcoBoost",          mpg:16, tank:33, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"3.5L V6 EcoBoost",          mpg:16, tank:33, fuel:"gasoline" },
+      ],
+      "2018": [
+        { engine:"3.5L V6 EcoBoost",          mpg:15, tank:33, fuel:"gasoline" },
+      ],
+    },
+    "Edge": {
+      "2024": [
+        { engine:"2.0L EcoBoost",             mpg:26, tank:19, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost ST",       mpg:20, tank:19, fuel:"gasoline" },
+      ],
+      "2023": [
+        { engine:"2.0L EcoBoost",             mpg:26, tank:19, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost ST",       mpg:20, tank:19, fuel:"gasoline" },
+      ],
+      "2022": [
+        { engine:"2.0L EcoBoost",             mpg:26, tank:19, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost ST",       mpg:20, tank:19, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"2.0L EcoBoost",             mpg:25, tank:19, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost ST",       mpg:19, tank:19, fuel:"gasoline" },
+      ],
+      "2020": [
+        { engine:"2.0L EcoBoost",             mpg:25, tank:19, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost ST",       mpg:19, tank:19, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"2.0L EcoBoost",             mpg:24, tank:19, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost Sport",    mpg:19, tank:19, fuel:"gasoline" },
+      ],
+    },
+    "Escape": {
+      "2024": [
+        { engine:"1.5L EcoBoost",             mpg:28, tank:15, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:24, tank:15, fuel:"gasoline" },
+        { engine:"2.5L PHEV",                 mpg:40, tank:14, fuel:"hybrid"   },
+        { engine:"2.5L Hybrid",               mpg:41, tank:14, fuel:"hybrid"   },
+      ],
+      "2023": [
+        { engine:"1.5L EcoBoost",             mpg:28, tank:15, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:24, tank:15, fuel:"gasoline" },
+        { engine:"2.5L PHEV",                 mpg:40, tank:14, fuel:"hybrid"   },
+        { engine:"2.5L Hybrid",               mpg:41, tank:14, fuel:"hybrid"   },
+      ],
+      "2022": [
+        { engine:"1.5L EcoBoost",             mpg:27, tank:15, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:23, tank:15, fuel:"gasoline" },
+        { engine:"2.5L PHEV",                 mpg:38, tank:14, fuel:"hybrid"   },
+      ],
+      "2021": [
+        { engine:"1.5L EcoBoost",             mpg:27, tank:15, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:23, tank:15, fuel:"gasoline" },
+        { engine:"2.5L Hybrid",               mpg:40, tank:14, fuel:"hybrid"   },
+      ],
+      "2020": [
+        { engine:"1.5L EcoBoost",             mpg:27, tank:15, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:23, tank:15, fuel:"gasoline" },
+      ],
+      "2019": [
+        { engine:"1.5L EcoBoost",             mpg:26, tank:15, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:22, tank:15, fuel:"gasoline" },
+      ],
+    },
+    "Bronco": {
+      "2024": [
+        { engine:"2.3L EcoBoost",             mpg:20, tank:20, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",          mpg:18, tank:20, fuel:"gasoline" },
+        { engine:"3.0L V6 Raptor",            mpg:15, tank:20, fuel:"gasoline" },
+      ],
+      "2023": [
+        { engine:"2.3L EcoBoost",             mpg:20, tank:20, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",          mpg:18, tank:20, fuel:"gasoline" },
+        { engine:"3.0L V6 Raptor",            mpg:15, tank:20, fuel:"gasoline" },
+      ],
+      "2022": [
+        { engine:"2.3L EcoBoost",             mpg:20, tank:20, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",          mpg:18, tank:20, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"2.3L EcoBoost",             mpg:20, tank:20, fuel:"gasoline" },
+        { engine:"2.7L V6 EcoBoost",          mpg:18, tank:20, fuel:"gasoline" },
+      ],
+    },
+    "Bronco Sport": {
+      "2024": [
+        { engine:"1.5L EcoBoost",             mpg:26, tank:17, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost Badlands",    mpg:23, tank:17, fuel:"gasoline" },
+      ],
+      "2023": [
+        { engine:"1.5L EcoBoost",             mpg:26, tank:17, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost Badlands",    mpg:23, tank:17, fuel:"gasoline" },
+      ],
+      "2022": [
+        { engine:"1.5L EcoBoost",             mpg:25, tank:17, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost Badlands",    mpg:22, tank:17, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"1.5L EcoBoost",             mpg:25, tank:17, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost Badlands",    mpg:22, tank:17, fuel:"gasoline" },
+      ],
+    },
+    "Maverick": {
+      "2024": [
+        { engine:"2.5L Hybrid",               mpg:42, tank:16, fuel:"hybrid"   },
+        { engine:"2.0L EcoBoost",             mpg:25, tank:16, fuel:"gasoline" },
+      ],
+      "2023": [
+        { engine:"2.5L Hybrid",               mpg:42, tank:16, fuel:"hybrid"   },
+        { engine:"2.0L EcoBoost",             mpg:25, tank:16, fuel:"gasoline" },
+      ],
+      "2022": [
+        { engine:"2.5L Hybrid",               mpg:42, tank:16, fuel:"hybrid"   },
+        { engine:"2.0L EcoBoost",             mpg:25, tank:16, fuel:"gasoline" },
+      ],
+    },
+    "F-450 Super Duty": {
+      "2024": [
+        { engine:"6.7L Power Stroke Diesel",  mpg:14, tank:34, fuel:"diesel"   },
+        { engine:"7.3L V8 Godzilla",          mpg:11, tank:34, fuel:"gasoline" },
+      ],
+      "2023": [
+        { engine:"6.7L Power Stroke Diesel",  mpg:14, tank:34, fuel:"diesel"   },
+        { engine:"7.3L V8 Godzilla",          mpg:11, tank:34, fuel:"gasoline" },
+      ],
+    },
+    "Transit": {
+      "2024": [
+        { engine:"3.5L V6 EcoBoost",          mpg:16, tank:25, fuel:"gasoline" },
+        { engine:"2.0L EcoBlue Diesel",       mpg:22, tank:25, fuel:"diesel"   },
+        { engine:"Electric",                  mpg:null,tank:null,fuel:"electric"},
+      ],
+      "2023": [
+        { engine:"3.5L V6 EcoBoost",          mpg:16, tank:25, fuel:"gasoline" },
+        { engine:"2.0L EcoBlue Diesel",       mpg:22, tank:25, fuel:"diesel"   },
+      ],
+      "2022": [
+        { engine:"3.5L V6 EcoBoost",          mpg:15, tank:25, fuel:"gasoline" },
+        { engine:"3.5L V6",                   mpg:13, tank:25, fuel:"gasoline" },
+      ],
+    },
+    "EcoSport": {
+      "2022": [
+        { engine:"1.0L EcoBoost",             mpg:27, tank:13, fuel:"gasoline" },
+        { engine:"2.0L 4-Cyl",               mpg:26, tank:13, fuel:"gasoline" },
+      ],
+      "2021": [
+        { engine:"1.0L EcoBoost",             mpg:27, tank:13, fuel:"gasoline" },
+        { engine:"2.0L 4-Cyl",               mpg:26, tank:13, fuel:"gasoline" },
+      ],
+      "2020": [
+        { engine:"1.0L EcoBoost",             mpg:27, tank:13, fuel:"gasoline" },
+        { engine:"2.0L 4-Cyl",               mpg:25, tank:13, fuel:"gasoline" },
+      ],
+    },
+    "Fusion": {
+      "2020": [
+        { engine:"1.5L EcoBoost",             mpg:29, tank:16, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:25, tank:16, fuel:"gasoline" },
+        { engine:"2.0L Hybrid",               mpg:42, tank:14, fuel:"hybrid"   },
+        { engine:"2.0L Energi PHEV",          mpg:42, tank:14, fuel:"hybrid"   },
+      ],
+      "2019": [
+        { engine:"1.5L EcoBoost",             mpg:29, tank:16, fuel:"gasoline" },
+        { engine:"2.0L EcoBoost",             mpg:25, tank:16, fuel:"gasoline" },
+        { engine:"2.0L Hybrid",               mpg:42, tank:14, fuel:"hybrid"   },
+      ],
+    },
+    "Mustang Mach-E": {
+      "2024": [
+        { engine:"Standard Range RWD",        mpg:null,tank:null,fuel:"electric"},
+        { engine:"Extended Range RWD",        mpg:null,tank:null,fuel:"electric"},
+        { engine:"Extended Range AWD",        mpg:null,tank:null,fuel:"electric"},
+        { engine:"GT Performance AWD",        mpg:null,tank:null,fuel:"electric"},
+      ],
+      "2023": [
+        { engine:"Standard Range RWD",        mpg:null,tank:null,fuel:"electric"},
+        { engine:"Extended Range RWD",        mpg:null,tank:null,fuel:"electric"},
+        { engine:"Extended Range AWD",        mpg:null,tank:null,fuel:"electric"},
       ],
     },
   },
@@ -597,7 +910,20 @@ export default function WiseRouteLive() {
         <>
           <Card>
             <Sec t="Where are you going?"/>
-            <input style={{width:"100%",background:"#060A14",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box",marginBottom:10}} placeholder="🏁 Enter destination" value={navDest} onChange={e=>setNavDest(e.target.value)}/>
+            <input
+              key="nav-dest-input"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="words"
+              spellCheck="false"
+              inputMode="text"
+              enterKeyHint="go"
+              style={{width:"100%",background:"#060A14",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:16,outline:"none",boxSizing:"border-box",marginBottom:10,WebkitAppearance:"none"}}
+              placeholder="Enter destination city or address"
+              defaultValue={navDest}
+              onBlur={e=>setNavDest(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"){setNavDest(e.target.value);e.target.blur();}}}
+            />
             {vehicle&&(
               <div style={{fontSize:12,color:C.muted,marginBottom:14}}>
                 🚗 {vehicle.year} {vehicle.make} {vehicle.model} · {fuelPct}% fuel{milesLeft?` · ~${milesLeft} mi range`:""}
