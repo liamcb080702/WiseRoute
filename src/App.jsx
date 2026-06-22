@@ -134,52 +134,69 @@ export default function WiseRouteLive() {
     setStLoading(false);
   };
 
-  // ── 3. AI PRICE ESTIMATION via Claude + web search ────
-  // Since we don't have a paid gas price API, Claude searches for
-  // current local prices and estimates per station brand
+  // ── 3. LIVE GAS PRICES ───────────────────────────────
+  // First tries Google Places (New) fuelOptions for real prices
+  // Falls back to AI web search for any stations without Google prices
   const fetchAiPrices = async (sts, lat, lng) => {
     if (!sts.length) return;
     setPriceLoading(true);
-    try {
-      const names = sts.map(s => s.name).join(", ");
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          tools: [{ type: "web_search_20250305", name: "web_search" }],
-          messages: [{
-            role: "user",
-            content: `Search for current regular unleaded gas prices near coordinates ${lat.toFixed(4)}, ${lng.toFixed(4)} today. 
-Then return ONLY a JSON object mapping each station name to its estimated price per gallon as a number.
-Stations: ${names}
-Use current local prices from GasBuddy or similar. If you can't find exact prices, estimate based on local average.
-Return ONLY valid JSON like: {"Shell":3.29,"BP":3.19} — no markdown, no explanation.`
-          }]
-        })
-      });
-      const d = await r.json();
-      const text = d.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      const clean = text.replace(/```json|```/g, "").trim();
-      // Extract JSON object from response
-      const match = clean.match(/\{[^}]+\}/);
-      if (match) {
-        const prices = JSON.parse(match[0]);
-        // Map prices back to stations by matching name keywords
-        const updated = {};
-        sts.forEach(s => {
-          const brand = Object.keys(prices).find(k =>
-            s.name.toLowerCase().includes(k.toLowerCase()) ||
-            k.toLowerCase().includes(s.name.toLowerCase().split(" ")[0])
-          );
-          updated[s.id] = brand ? prices[brand] : null;
+    const updated = {};
+
+    // Step 1: Try Google Places (New) API for real fuel prices
+    await Promise.all(sts.map(async (s) => {
+      try {
+        const r = await fetch(
+          `https://places.googleapis.com/v1/places/${s.id}?fields=fuelOptions,displayName&key=${GOOGLE_API_KEY}`,
+          { headers: { "Content-Type": "application/json", "X-Goog-FieldMask": "fuelOptions" } }
+        );
+        const d = await r.json();
+        const fuelPrices = d.fuelOptions?.fuelPrices || [];
+        const regular = fuelPrices.find(f =>
+          f.type === "REGULAR_UNLEADED" || f.type === "REGULAR" || f.type === "UNLEADED_87"
+        );
+        if (regular?.price) {
+          const units = Number(regular.price.units || 0);
+          const nanos = Number(regular.price.nanos || 0) / 1e9;
+          updated[s.id] = +(units + nanos).toFixed(2);
+        }
+      } catch(e) { /* silent fail, will use AI fallback */ }
+    }));
+
+    // Step 2: AI web search fallback for stations Google didn't have prices for
+    const missing = sts.filter(s => !updated[s.id]);
+    if (missing.length > 0) {
+      try {
+        const names = missing.map(s => s.name).join(", ");
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 600,
+            tools: [{ type: "web_search_20250305", name: "web_search" }],
+            messages: [{
+              role: "user",
+              content: "Search GasBuddy for current regular unleaded gas prices near " + lat.toFixed(4) + ", " + lng.toFixed(4) + " today. Return ONLY a JSON object mapping brand name to price per gallon as a number. Stations: " + names + ". No markdown, just JSON."
+            }]
+          })
         });
-        setGasPrices(prev => ({ ...prev, ...updated }));
-      }
-    } catch(e) {
-      console.error("Price fetch error:", e);
+        const d = await r.json();
+        const text = d.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+        const match = text.replace(/```json|```/g,"").trim().match(/\{[^}]+\}/);
+        if (match) {
+          const prices = JSON.parse(match[0]);
+          missing.forEach(s => {
+            const brand = Object.keys(prices).find(k =>
+              s.name.toLowerCase().includes(k.toLowerCase()) ||
+              k.toLowerCase().includes(s.name.toLowerCase().split(" ")[0])
+            );
+            if (brand) updated[s.id] = prices[brand];
+          });
+        }
+      } catch(e) { console.error("AI price fallback failed:", e); }
     }
+
+    setGasPrices(prev => ({ ...prev, ...updated }));
     setPriceLoading(false);
   };
 
@@ -315,7 +332,7 @@ Return ONLY valid JSON like: {"Shell":3.29,"BP":3.19} — no markdown, no explan
         <Sec t="Step 2 — Paste Your API Key"/>
         <div style={{fontSize:13,color:C.muted,marginBottom:8}}>Open this file and replace line 4:</div>
         <div style={{background:"#060A14",border:`1px solid ${C.border}`,borderRadius:10,padding:12,fontFamily:"monospace",fontSize:12,color:"#34D399",marginBottom:12,wordBreak:"break-all"}}>
-          const GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY_HERE";
+          const GOOGLE_API_KEY = "AIzaSyCF5XDID4MtZ199ckkSS02HYekWtVz4uSg";
         </div>
         <div style={{fontSize:13,color:C.muted}}>Replace <span style={{color:C.yellow}}>"YOUR_GOOGLE_API_KEY_HERE"</span> with your actual key, then reload.</div>
       </Card>
@@ -481,7 +498,7 @@ Return ONLY valid JSON like: {"Shell":3.29,"BP":3.19} — no markdown, no explan
                 ) : gasPrices[s.id] ? (
                   <>
                     <div style={{fontSize:22,fontWeight:900,color:C.green}}>${gasPrices[s.id].toFixed(2)}</div>
-                    <div style={{fontSize:11,color:C.muted}}>/gal · AI est.</div>
+                    <div style={{fontSize:11,color:C.muted}}>/gal · live</div>
                   </>
                 ) : (
                   <div style={{fontSize:12,color:C.muted,marginTop:8}}>Price<br/>pending</div>
