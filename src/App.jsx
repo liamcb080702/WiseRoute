@@ -646,27 +646,71 @@ const SEL={width:"100%",background:"#060A14",border:`1px solid ${C.border}`,bord
 // ── API HELPERS ───────────────────────────────────────
 async function reverseGeocode(lat,lng){
   try{
-    const r=await fetch(`${PROXY}?action=reversegeocode`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({lat,lng})});
-    const d=await r.json();
-    return d.city||"Your location";
+    await loadGoogleMaps();
+    return new Promise((resolve)=>{
+      const gc=new window.google.maps.Geocoder();
+      gc.geocode({location:{lat,lng}},(results,status)=>{
+        if(status!=="OK"||!results[0]){resolve("Your location");return;}
+        const comp=results[0].address_components||[];
+        const city=comp.find(c=>c.types.includes("locality"))?.long_name||"Your location";
+        const state=comp.find(c=>c.types.includes("administrative_area_level_1"))?.short_name||"";
+        resolve(`${city}${state?", "+state:""}`);
+      });
+    });
   }catch{return "Your location";}
 }
 
-// All Google Maps calls go through our Vercel proxy (/api/maps)
 const PROXY = "/api/maps";
+const KEY = "AIzaSyCF5XDID4MtZ199ckkSS02HYekWtVz4uSg";
+
+// Load Google Maps JS SDK once
+let gmapsLoaded = false;
+function loadGoogleMaps(){
+  return new Promise((resolve)=>{
+    if(window.google && window.google.maps){ resolve(); return; }
+    if(gmapsLoaded){ const t=setInterval(()=>{ if(window.google?.maps){clearInterval(t);resolve();} },100); return; }
+    gmapsLoaded=true;
+    window.__gmapsReady=resolve;
+    const s=document.createElement("script");
+    s.src=`https://maps.googleapis.com/maps/api/js?key=${KEY}&libraries=places&callback=__gmapsReady`;
+    s.async=true;
+    document.head.appendChild(s);
+  });
+}
 
 async function geocodeAddress(address){
-  const r=await fetch(`${PROXY}?action=geocode`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({address})});
-  const d=await r.json();
-  if(d.error)throw new Error(d.error);
-  return d;
+  await loadGoogleMaps();
+  return new Promise((resolve,reject)=>{
+    const gc=new window.google.maps.Geocoder();
+    gc.geocode({address},(results,status)=>{
+      if(status!=="OK"||!results[0]){reject(new Error("Address not found"));return;}
+      resolve({lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng(),formatted:results[0].formatted_address});
+    });
+  });
 }
 
 async function getDirections(originLat,originLng,destLat,destLng){
-  const r=await fetch(`${PROXY}?action=directions`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({originLat,originLng,destLat,destLng})});
-  const d=await r.json();
-  if(d.error)throw new Error(d.error);
-  return d;
+  await loadGoogleMaps();
+  return new Promise((resolve,reject)=>{
+    const ds=new window.google.maps.DirectionsService();
+    ds.route({
+      origin:{lat:originLat,lng:originLng},
+      destination:{lat:destLat,lng:destLng},
+      travelMode:window.google.maps.TravelMode.DRIVING
+    },(result,status)=>{
+      if(status!=="OK"){reject(new Error("Route not found: "+status));return;}
+      const leg=result.routes[0].legs[0];
+      resolve({
+        totalMiles:+(leg.distance.value*0.000621371).toFixed(1),
+        totalTime:leg.duration.text,
+        steps:leg.steps.map(s=>({
+          instruction:s.instructions.replace(/<[^>]+>/g,""),
+          distance:s.distance.text,
+          duration:s.duration.text
+        }))
+      });
+    });
+  });
 }
 
 async function findNearbyStations(lat,lng){
@@ -805,24 +849,28 @@ export default function WiseRoute(){
     const[showSuggestions,setShowSuggestions]=useState(false);
     const debounceRef=useRef(null);
 
-    // Fetch autocomplete via proxy — no CORS issues
+    // Autocomplete via Google Maps Places SDK — works from browser
     const fetchSuggestions=async(val)=>{
       if(!val||val.length<2){setSuggestions([]);return;}
       setSugLoading(true);
       try{
-        const r=await fetch(`${PROXY}?action=autocomplete`,{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({input:val,lat:location?.lat,lng:location?.lng})
+        await loadGoogleMaps();
+        const svc=new window.google.maps.places.AutocompleteService();
+        const req={input:val};
+        if(location){req.location=new window.google.maps.LatLng(location.lat,location.lng);req.radius=50000;}
+        svc.getPlacePredictions(req,(preds,status)=>{
+          if(status===window.google.maps.places.PlacesServiceStatus.OK&&preds){
+            setSuggestions(preds.map(p=>({
+              description:p.description,
+              structured_formatting:{
+                main_text:p.structured_formatting?.main_text||p.description.split(",")[0],
+                secondary_text:p.structured_formatting?.secondary_text||""
+              }
+            })));
+          } else setSuggestions([]);
+          setSugLoading(false);
         });
-        const d=await r.json();
-        const preds=(d.predictions||[]).map(p=>({
-          description:p.description,
-          structured_formatting:{main_text:p.main_text,secondary_text:p.secondary_text}
-        }));
-        setSuggestions(preds);
-      }catch(e){setSuggestions([]);}
-      setSugLoading(false);
+      }catch(e){setSuggestions([]);setSugLoading(false);}
     };
 
     const handleInput=(val)=>{
