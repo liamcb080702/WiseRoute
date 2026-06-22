@@ -1,62 +1,116 @@
+// WiseRoute API Proxy - Vercel Serverless Function
+// Uses free OpenStreetMap services - no API key needed for geocoding/routing
+// Keeps Google Places (New) for gas stations only
+
+const GOOGLE_KEY = "AIzaSyCF5XDID4MtZ199ckkSS02HYekWtVz4uSg";
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") { res.status(200).end(); return; }
 
-  const KEY = "AIzaSyCF5XDID4MtZ199ckkSS02HYekWtVz4uSg";
   const { action } = req.query;
   const body = req.body || {};
 
   try {
+    // ── GEOCODE via Nominatim (OpenStreetMap) - FREE, no key ──
     if (action === "geocode") {
-      const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(body.address)}&key=${KEY}`);
+      const q = encodeURIComponent(body.address);
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&addressdetails=1`,
+        { headers: { "User-Agent": "WiseRoute/1.0 (wiseroute.app)" } }
+      );
       const d = await r.json();
-      if (d.status !== "OK") throw new Error("Address not found: " + d.status);
-      const loc = d.results[0].geometry.location;
-      return res.json({ lat: loc.lat, lng: loc.lng, formatted: d.results[0].formatted_address });
-
-    } else if (action === "directions") {
-      const r = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${body.originLat},${body.originLng}&destination=${body.destLat},${body.destLng}&key=${KEY}`);
-      const d = await r.json();
-      if (d.status !== "OK") throw new Error("Route not found: " + d.status);
-      const leg = d.routes[0].legs[0];
+      if (!d || d.length === 0) return res.status(400).json({ error: "Address not found" });
       return res.json({
-        totalMiles: +(leg.distance.value * 0.000621371).toFixed(1),
-        totalTime: leg.duration.text,
-        steps: leg.steps.map(s => ({
-          instruction: s.html_instructions.replace(/<[^>]+>/g, ""),
-          distance: s.distance.text,
-          duration: s.duration.text,
-        }))
+        lat: parseFloat(d[0].lat),
+        lng: parseFloat(d[0].lon),
+        formatted: d[0].display_name.split(",").slice(0,3).join(",").trim()
       });
 
+    // ── AUTOCOMPLETE via Photon (OpenStreetMap) - FREE, no key ──
     } else if (action === "autocomplete") {
-      const bias = body.lat ? `&location=${body.lat},${body.lng}&radius=50000` : "";
-      const r = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(body.input)}&types=geocode|establishment${bias}&key=${KEY}`);
+      const q = encodeURIComponent(body.input);
+      const bias = body.lat ? `&lat=${body.lat}&lon=${body.lng}` : "";
+      const r = await fetch(
+        `https://photon.komoot.io/api/?q=${q}&limit=6&lang=en${bias}`,
+        { headers: { "User-Agent": "WiseRoute/1.0" } }
+      );
       const d = await r.json();
-      return res.json({
-        predictions: (d.predictions || []).map(p => ({
-          description: p.description,
-          main_text: p.structured_formatting?.main_text || p.description.split(",")[0],
-          secondary_text: p.structured_formatting?.secondary_text || "",
-        }))
-      });
+      const predictions = (d.features || []).map(f => {
+        const p = f.properties;
+        const main = p.name || p.city || p.street || "";
+        const secondary = [p.city, p.state, p.country].filter(Boolean).join(", ");
+        const description = [main, secondary].filter(Boolean).join(", ");
+        return { description, main_text: main, secondary_text: secondary };
+      }).filter(p => p.description);
+      return res.json({ predictions });
 
-    } else if (action === "reversegeocode") {
-      const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${body.lat},${body.lng}&key=${KEY}`);
+    // ── DIRECTIONS via OSRM (OpenStreetMap) - FREE, no key ──
+    } else if (action === "directions") {
+      const { originLat, originLng, destLat, destLng } = body;
+      const r = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&steps=true&annotations=false`,
+        { headers: { "User-Agent": "WiseRoute/1.0" } }
+      );
       const d = await r.json();
-      const comp = d.results?.[0]?.address_components || [];
-      const city = comp.find(c => c.types.includes("locality"))?.long_name || "Your location";
-      const state = comp.find(c => c.types.includes("administrative_area_level_1"))?.short_name || "";
+      if (d.code !== "Ok" || !d.routes?.length) {
+        return res.status(400).json({ error: "Route not found" });
+      }
+      const route = d.routes[0];
+      const totalMiles = +(route.distance * 0.000621371).toFixed(1);
+      const totalMins = Math.round(route.duration / 60);
+      const hrs = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      const totalTime = hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
+      const steps = [];
+      (route.legs || []).forEach(leg => {
+        (leg.steps || []).forEach(step => {
+          if (!step.maneuver) return;
+          const distMi = step.distance * 0.000621371;
+          const durMin = Math.max(1, Math.round(step.duration / 60));
+          const type = step.maneuver.type || "";
+          const modifier = step.maneuver.modifier || "";
+          let instruction = "Continue";
+          if (type === "depart") instruction = `Head ${modifier || "forward"}`;
+          else if (type === "turn") instruction = `Turn ${modifier} onto ${step.name || "road"}`;
+          else if (type === "arrive") instruction = "Arrive at destination";
+          else if (type === "merge") instruction = `Merge ${modifier}`;
+          else if (type === "on ramp") instruction = `Take ramp ${modifier}`;
+          else if (type === "off ramp") instruction = `Take exit ${modifier}`;
+          else if (type === "fork") instruction = `Keep ${modifier}`;
+          else if (type === "end of road") instruction = `Turn ${modifier}`;
+          else if (type === "roundabout") instruction = `Enter roundabout`;
+          else if (step.name) instruction = `Continue on ${step.name}`;
+          steps.push({
+            instruction,
+            distance: distMi < 0.1 ? `${Math.round(distMi * 5280)} ft` : `${distMi.toFixed(1)} mi`,
+            duration: `${durMin} min`
+          });
+        });
+      });
+      return res.json({ totalMiles, totalTime, steps: steps.length ? steps : [{ instruction: "Head to destination", distance: `${totalMiles} mi`, duration: totalTime }] });
+
+    // ── REVERSE GEOCODE via Nominatim - FREE ──
+    } else if (action === "reversegeocode") {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${body.lat}&lon=${body.lng}&format=json`,
+        { headers: { "User-Agent": "WiseRoute/1.0 (wiseroute.app)" } }
+      );
+      const d = await r.json();
+      const addr = d.address || {};
+      const city = addr.city || addr.town || addr.village || addr.county || "Your location";
+      const state = addr.state_code || addr.state || "";
       return res.json({ city: `${city}${state ? ", " + state : ""}` });
 
+    // ── NEARBY STATIONS via Google Places (New) ──
     } else if (action === "nearbystations") {
       const r = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Goog-Api-Key": KEY,
+          "X-Goog-Api-Key": GOOGLE_KEY,
           "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.fuelOptions"
         },
         body: JSON.stringify({
