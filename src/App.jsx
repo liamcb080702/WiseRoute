@@ -110,7 +110,7 @@ export default function WiseRouteLive() {
             locationRestriction: {
               circle: {
                 center: { latitude: lat, longitude: lng },
-                radius: 24000  // ~15 miles in meters
+                radius: 50000  // ~30 miles in meters
               }
             }
           })
@@ -161,6 +161,7 @@ export default function WiseRouteLive() {
       if (needPrices.length > 0) fetchAiPrices(needPrices, lat, lng);
     } catch(e) {
       console.error("Places error:", e.message);
+      setLocError("Station search error: " + e.message);
       setStLoading(false);
     }
     setStLoading(false);
@@ -500,9 +501,17 @@ export default function WiseRouteLive() {
           <div style={{fontSize:13,color:C.muted,marginTop:12}}>Finding gas stations near you…</div>
         </div>
       ) : stations.length === 0 && location ? (
-        <div style={{textAlign:"center",padding:40,color:C.muted}}>
+        <div style={{textAlign:"center",padding:30,color:C.muted}}>
           <div style={{fontSize:40,marginBottom:12}}>🔍</div>
-          <div>No stations found. Try refreshing.</div>
+          <div style={{marginBottom:12}}>No stations found.</div>
+          <div style={{fontSize:11,color:C.muted,marginBottom:16,lineHeight:1.6}}>
+            This may mean Places API (New) needs to be enabled in Google Cloud.<br/>
+            Go to: APIs & Services → Library → search "Places API (New)" → Enable
+          </div>
+          <button onClick={()=>findStations(location.lat,location.lng)} 
+            style={{background:C.accent+"22",border:"1px solid "+C.accent+"44",borderRadius:10,padding:"10px 20px",color:"#60A5FA",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            ↺ Try Again
+          </button>
         </div>
       ) : !location ? (
         <div style={{textAlign:"center",padding:40}}>
