@@ -88,47 +88,79 @@ export default function WiseRouteLive() {
     );
   };
 
-  // ── 2. FIND NEARBY GAS STATIONS via Google Places ─────
+  // ── 2. FIND NEARBY GAS STATIONS via Google Places (New) ─
   const findStations = async (lat, lng) => {
     if (apiKeyMissing) return;
     setStLoading(true);
     setStations([]);
     try {
-      // Google Places Nearby Search — gas stations within 10 miles (16000m)
+      // Use Places API (New) — Nearby Search — supports CORS from browser
       const r = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=16000&type=gas_station&key=${GOOGLE_API_KEY}`
+        "https://places.googleapis.com/v1/places:searchNearby",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": GOOGLE_API_KEY,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.fuelOptions,places.priceLevel"
+          },
+          body: JSON.stringify({
+            includedTypes: ["gas_station"],
+            maxResultCount: 12,
+            locationRestriction: {
+              circle: {
+                center: { latitude: lat, longitude: lng },
+                radius: 24000  // ~15 miles in meters
+              }
+            }
+          })
+        }
       );
       const d = await r.json();
-      if (d.status !== "OK" && d.status !== "ZERO_RESULTS") {
-        throw new Error(d.status);
-      }
-      const raw = d.results || [];
-      // Map to our format, calculate distance
-      const mapped = raw.slice(0, 12).map(p => {
-        const dLat = p.geometry.location.lat - lat;
-        const dLng = p.geometry.location.lng - lng;
+      if (d.error) throw new Error(d.error.message);
+      const raw = d.places || [];
+      const mapped = raw.map(p => {
+        const pLat = p.location.latitude;
+        const pLng = p.location.longitude;
+        const dLat = pLat - lat;
+        const dLng = pLng - lng;
         const distMi = Math.sqrt(dLat*dLat + dLng*dLng) * 69;
+        // Extract fuel price if available
+        let livePrice = null;
+        const fuelPrices = p.fuelOptions?.fuelPrices || [];
+        const regular = fuelPrices.find(f =>
+          f.type === "REGULAR_UNLEADED" || f.type === "REGULAR" || f.type === "UNLEADED_87"
+        );
+        if (regular?.price) {
+          const units = Number(regular.price.units || 0);
+          const nanos = Number(regular.price.nanos || 0) / 1e9;
+          livePrice = +(units + nanos).toFixed(2);
+        }
         return {
-          id: p.place_id,
-          name: p.name,
-          address: p.vicinity,
-          lat: p.geometry.location.lat,
-          lng: p.geometry.location.lng,
+          id: p.id,
+          name: p.displayName?.text || "Gas Station",
+          address: p.formattedAddress || "",
+          lat: pLat,
+          lng: pLng,
           distanceMi: +distMi.toFixed(1),
           rating: p.rating || null,
-          reviewCount: p.user_ratings_total || 0,
-          openNow: p.opening_hours?.open_now ?? true,
-          price: null, // filled by AI price lookup
+          reviewCount: p.userRatingCount || 0,
+          openNow: p.regularOpeningHours?.openNow ?? true,
+          livePrice,
           bath: p.rating ? +Math.min(5, p.rating * 0.95).toFixed(1) : null,
           clean: p.rating ? +Math.min(5, p.rating * 0.9).toFixed(1) : null,
-          photo: p.photos?.[0]?.photo_reference || null,
         };
       }).sort((a,b) => a.distanceMi - b.distanceMi);
       setStations(mapped);
-      // Now fetch AI-estimated prices for top 6
-      fetchAiPrices(mapped.slice(0, 6), lat, lng);
+      // Set any live prices we already got from Google
+      const livePrices = {};
+      mapped.forEach(s => { if (s.livePrice) livePrices[s.id] = s.livePrice; });
+      if (Object.keys(livePrices).length > 0) setGasPrices(prev => ({...prev, ...livePrices}));
+      // Fetch AI prices for stations without Google prices
+      const needPrices = mapped.slice(0, 8).filter(s => !s.livePrice);
+      if (needPrices.length > 0) fetchAiPrices(needPrices, lat, lng);
     } catch(e) {
-      console.error("Places error:", e);
+      console.error("Places error:", e.message);
       setStLoading(false);
     }
     setStLoading(false);
