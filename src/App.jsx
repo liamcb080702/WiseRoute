@@ -653,7 +653,6 @@ async function reverseGeocode(lat,lng){
 }
 
 // All Google Maps calls go through our Vercel proxy (/api/maps)
-// This bypasses CORS restrictions on client-side Google API calls
 const PROXY = "/api/maps";
 
 async function geocodeAddress(address){
@@ -671,13 +670,13 @@ async function getDirections(originLat,originLng,destLat,destLng){
 }
 
 async function findNearbyStations(lat,lng){
-  const r=await fetch("https://places.googleapis.com/v1/places:searchNearby",{
+  const r=await fetch(`${PROXY}?action=nearbystations`,{
     method:"POST",
-    headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY,"X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.fuelOptions"},
-    body:JSON.stringify({includedTypes:["gas_station"],maxResultCount:15,locationRestriction:{circle:{center:{latitude:lat,longitude:lng},radius:50000}}})
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({lat,lng})
   });
   const d=await r.json();
-  if(d.error)throw new Error(d.error.message);
+  if(d.error)throw new Error(d.error);
   return (d.places||[]).map(p=>{
     const pLat=p.location.latitude,pLng=p.location.longitude;
     const distMi=Math.sqrt(Math.pow(pLat-lat,2)+Math.pow(pLng-lng,2))*69;
