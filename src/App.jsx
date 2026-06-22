@@ -683,8 +683,12 @@ async function geocodeAddress(address){
   return new Promise((resolve,reject)=>{
     const gc=new window.google.maps.Geocoder();
     gc.geocode({address},(results,status)=>{
-      if(status!=="OK"||!results[0]){reject(new Error("Address not found"));return;}
-      resolve({lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng(),formatted:results[0].formatted_address});
+      if(status==="OK"&&results[0]){
+        resolve({lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng(),formatted:results[0].formatted_address});
+      } else {
+        // Return the actual Google status so we can debug it
+        reject(new Error("Geocode failed: "+status+" — check Maps JavaScript API is enabled in Google Cloud"));
+      }
     });
   });
 }
@@ -892,6 +896,12 @@ export default function WiseRoute(){
       if(!location){setErr("Enable location first on the Home screen.");return;}
       setLoading(true);setErr("");setSuggestions([]);setShowSuggestions(false);
       try{
+        // Make sure SDK is loaded before proceeding
+        await loadGoogleMaps();
+        if(!window.google?.maps?.Geocoder){
+          setErr("Maps not loaded yet — please wait a moment and try again.");
+          setLoading(false);return;
+        }
         const destCoords=await geocodeAddress(d);
         const route=await getDirections(location.lat,location.lng,destCoords.lat,destCoords.lng);
         const totalMi=route.totalMiles;
@@ -998,7 +1008,7 @@ export default function WiseRoute(){
           )}
           {vehicle&&<div style={{fontSize:12,color:C.muted,marginBottom:12,padding:"8px 12px",background:"#ffffff08",borderRadius:8}}>{vehicle.year} {vehicle.make} {vehicle.model} · {fuelPct}% fuel{milesLeft?` · ~${milesLeft} mi range`:""}</div>}
           {!location&&<div style={{fontSize:12,color:C.yellow,marginBottom:12,padding:"8px 12px",background:C.yellow+"18",borderRadius:8}}>⚠️ Enable location on the Home screen first</div>}
-          {err&&<div style={{fontSize:12,color:C.red,marginBottom:12,padding:"8px 12px",background:C.red+"18",borderRadius:8}}>{err}</div>}
+          {err&&<div style={{fontSize:11,color:C.red,marginBottom:12,padding:"8px 12px",background:C.red+"18",borderRadius:8,lineHeight:1.5}}>{err}</div>}
           <Btn onClick={()=>startNav()} disabled={loading||!location||!inputVal.trim()}>{loading?"Planning route…":"Start Navigation →"}</Btn>
         </Card>
 
