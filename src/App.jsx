@@ -646,60 +646,28 @@ const SEL={width:"100%",background:"#060A14",border:`1px solid ${C.border}`,bord
 // ── API HELPERS ───────────────────────────────────────
 async function reverseGeocode(lat,lng){
   try{
-    const r=await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_API_KEY}`);
+    const r=await fetch(`${PROXY}?action=reversegeocode`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({lat,lng})});
     const d=await r.json();
-    const comp=d.results?.[0]?.address_components||[];
-    const city=comp.find(c=>c.types.includes("locality"))?.long_name||"Your location";
-    const state=comp.find(c=>c.types.includes("administrative_area_level_1"))?.short_name||"";
-    return `${city}${state?", "+state:""}`;
+    return d.city||"Your location";
   }catch{return "Your location";}
 }
 
-// Geocode via Places (New) text search — CORS-friendly
+// All Google Maps calls go through our Vercel proxy (/api/maps)
+// This bypasses CORS restrictions on client-side Google API calls
+const PROXY = "/api/maps";
+
 async function geocodeAddress(address){
-  const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY,"X-Goog-FieldMask":"places.location,places.formattedAddress,places.displayName"},
-    body:JSON.stringify({textQuery:address})
-  });
+  const r=await fetch(`${PROXY}?action=geocode`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({address})});
   const d=await r.json();
-  if(d.error)throw new Error(d.error.message);
-  if(!d.places||d.places.length===0)throw new Error("Address not found");
-  const p=d.places[0];
-  return{lat:p.location.latitude,lng:p.location.longitude,formatted:p.formattedAddress||p.displayName?.text||address};
+  if(d.error)throw new Error(d.error);
+  return d;
 }
 
-// Directions via Routes API (New) — CORS-friendly, returns turn-by-turn
 async function getDirections(originLat,originLng,destLat,destLng){
-  const r=await fetch("https://routes.googleapis.com/directions/v2:computeRoutes",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY,"X-Goog-FieldMask":"routes.distanceMeters,routes.duration,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration"},
-    body:JSON.stringify({
-      origin:{location:{latLng:{latitude:originLat,longitude:originLng}}},
-      destination:{location:{latLng:{latitude:destLat,longitude:destLng}}},
-      travelMode:"DRIVE",
-      routingPreference:"TRAFFIC_AWARE"
-    })
-  });
+  const r=await fetch(`${PROXY}?action=directions`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({originLat,originLng,destLat,destLng})});
   const d=await r.json();
-  if(d.error)throw new Error(d.error.message);
-  if(!d.routes||d.routes.length===0)throw new Error("No route found");
-  const route=d.routes[0];
-  const totalMiles=+(route.distanceMeters*0.000621371).toFixed(1);
-  const durSec=parseInt(route.duration?.replace("s","")||"0");
-  const hrs=Math.floor(durSec/3600),mins=Math.round((durSec%3600)/60);
-  const totalTime=hrs>0?`${hrs}h ${mins}m`:`${mins} min`;
-  const steps=[];
-  (route.legs||[]).forEach(leg=>{
-    (leg.steps||[]).forEach(s=>{
-      const instr=s.navigationInstruction?.instructions||"Continue";
-      const distMi=(s.distanceMeters||0)*0.000621371;
-      const sSec=parseInt(s.staticDuration?.replace("s","")||"0");
-      const sMin=Math.max(1,Math.round(sSec/60));
-      steps.push({instruction:instr,distance:distMi<0.1?`${Math.round(distMi*5280)} ft`:`${distMi.toFixed(1)} mi`,duration:`${sMin} min`});
-    });
-  });
-  return{totalMiles,totalTime,steps:steps.length>0?steps:[{instruction:"Head to destination",distance:`${totalMiles} mi`,duration:totalTime}]};
+  if(d.error)throw new Error(d.error);
+  return d;
 }
 
 async function findNearbyStations(lat,lng){
@@ -838,26 +806,21 @@ export default function WiseRoute(){
     const[showSuggestions,setShowSuggestions]=useState(false);
     const debounceRef=useRef(null);
 
-    // Fetch autocomplete via Places Autocomplete (New) — CORS-friendly
+    // Fetch autocomplete via proxy — no CORS issues
     const fetchSuggestions=async(val)=>{
       if(!val||val.length<2){setSuggestions([]);return;}
       setSugLoading(true);
       try{
-        const body={input:val};
-        if(location){body.locationBias={circle:{center:{latitude:location.lat,longitude:location.lng},radius:50000}};}
-        const r=await fetch("https://places.googleapis.com/v1/places:autocomplete",{
+        const r=await fetch(`${PROXY}?action=autocomplete`,{
           method:"POST",
-          headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY},
-          body:JSON.stringify(body)
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({input:val,lat:location?.lat,lng:location?.lng})
         });
         const d=await r.json();
-        const preds=(d.suggestions||[]).map(s=>({
-          description:s.placePrediction?.text?.text||"",
-          structured_formatting:{
-            main_text:s.placePrediction?.structuredFormat?.mainText?.text||s.placePrediction?.text?.text||"",
-            secondary_text:s.placePrediction?.structuredFormat?.secondaryText?.text||""
-          }
-        })).filter(p=>p.description);
+        const preds=(d.predictions||[]).map(p=>({
+          description:p.description,
+          structured_formatting:{main_text:p.main_text,secondary_text:p.secondary_text}
+        }));
         setSuggestions(preds);
       }catch(e){setSuggestions([]);}
       setSugLoading(false);
