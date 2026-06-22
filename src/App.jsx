@@ -788,16 +788,11 @@ export default function WiseRoute(){
 
   useEffect(()=>{if(location)loadStations(location.lat,location.lng);},[location?.lat,location?.lng]);
 
-  // Drive mode timer
-  useEffect(()=>{
-    if(driving){iRef.current=setInterval(()=>{setSimFuel(p=>Math.max(0,+(p-0.3).toFixed(2)));setMilesDriven(p=>+(p+mpg*0.003).toFixed(1));},800);}
-    else clearInterval(iRef.current);
-    return()=>clearInterval(iRef.current);
-  },[driving,mpg]);
+
 
   const scoreS=s=>(3.60-(gasPrices[s.id]||3.50))*25+(s.rating||3)*8-s.distanceMi*1.5;
   const sorted=[...stations].sort((a,b)=>sortBy==="price"?(gasPrices[a.id]||99)-(gasPrices[b.id]||99):sortBy==="rating"?(b.rating||0)-(a.rating||0):scoreS(b)-scoreS(a));
-  const urgency=simFuel<=15?"now":simFuel<=30?"soon":"ok";
+  const urgency=fuelPct<=15?"now":fuelPct<=30?"soon":"ok";
   const U={ok:{col:C.green,bg:"#0A2818",label:"Range OK",icon:"✅"},soon:{col:C.yellow,bg:"#1A1200",label:"Fill Up Soon",icon:"⚠️"},now:{col:C.red,bg:"#1A0800",label:"Fill Up NOW",icon:"🚨"}};
   const urg=U[urgency];
 
@@ -1076,51 +1071,230 @@ export default function WiseRoute(){
     );
   }
 
-  // ══ DRIVE SCREEN ═══════════════════════════════════════
+  // ══ DRIVE SCREEN — Live GPS tracking + smart alerts ═══
   function DriveScreen(){
-    const gallonsNow=(ts*simFuel)/100;
-    const milesNow=Math.round(gallonsNow*mpg);
+    const[tracking,setTracking]=useState(false);
+    const[livePos,setLivePos]=useState(location);
+    const[milesDriven,setMilesDriven]=useState(0);
+    const[lastPos,setLastPos]=useState(null);
+    const[currentFuel,setCurrentFuel]=useState(fuelPct);
+    const[alerts,setAlerts]=useState([]);
+    const[notifAllowed,setNotifAllowed]=useState(false);
+    const[driveAi,setDriveAi]=useState("");
+    const[driveAiLoading,setDriveAiLoading]=useState(false);
+    const[alertsFired,setAlertsFired]=useState(new Set());
+    const watchRef=useRef(null);
+
+    const gallonsNow=(ts*currentFuel)/100;
+    const milesNow=mpg?Math.round(gallonsNow*mpg):null;
+    const urgency=currentFuel<=15?"now":currentFuel<=30?"soon":"ok";
+    const U2={ok:{col:C.green,bg:"#0A2818",label:"Range OK",icon:"✅"},soon:{col:C.yellow,bg:"#1A1200",label:"Fill Up Soon",icon:"⚠️"},now:{col:C.red,bg:"#1A0800",label:"Fill Up NOW",icon:"🚨"}};
+    const urg2=U2[urgency];
     const top=sorted[0];
+
+    // Request notification permission
+    const requestNotifs=async()=>{
+      if(!("Notification" in window)){setAlerts(a=>[...a,"Notifications not supported in this browser."]);return;}
+      const perm=await Notification.requestPermission();
+      if(perm==="granted"){setNotifAllowed(true);setAlerts(a=>[...a,"✅ Notifications enabled!"]);}
+      else setAlerts(a=>[...a,"⚠️ Notifications blocked. Enable in Settings → Safari → WiseRoute."]);
+    };
+
+    // Send notification
+    const sendNotif=(title,body)=>{
+      if(notifAllowed&&Notification.permission==="granted"){
+        new Notification(title,{body,icon:"/favicon.ico"});
+      }
+      setAlerts(a=>[{time:new Date().toLocaleTimeString(),title,body},...a].slice(0,10));
+    };
+
+    // Calculate distance between two coords in miles
+    const calcMiles=(lat1,lng1,lat2,lng2)=>{
+      const R=3959;
+      const dLat=(lat2-lat1)*Math.PI/180;
+      const dLng=(lng2-lng1)*Math.PI/180;
+      const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+      return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    };
+
+    // Start live GPS tracking
+    const startTracking=()=>{
+      if(!navigator.geolocation){setAlerts(a=>[...a,"GPS not available."]);return;}
+      setTracking(true);
+      setAlerts(a=>[...a,"🟢 Tracking started — WiseRoute is watching your fuel level."]);
+      watchRef.current=navigator.geolocation.watchPosition(pos=>{
+        const{latitude:lat,longitude:lng}=pos.coords;
+        setLivePos({lat,lng});
+        setLastPos(prev=>{
+          if(prev&&mpg){
+            const dist=calcMiles(prev.lat,prev.lng,lat,lng);
+            if(dist>0.01){// Only count if moved more than ~50ft
+              setMilesDriven(m=>{
+                const newMiles=+(m+dist).toFixed(2);
+                // Calculate fuel used
+                const fuelUsed=(dist/mpg)*100/ts;
+                setCurrentFuel(f=>{
+                  const newFuel=Math.max(0,+(f-fuelUsed).toFixed(2));
+                  // Fire alerts at thresholds
+                  setAlertsFired(fired=>{
+                    if(newFuel<=15&&!fired.has("15")){
+                      sendNotif("🚨 WiseRoute: Fill Up NOW!",`Only ${Math.round(newFuel)}% fuel left (~${Math.round(newFuel*ts/100*mpg)} miles). ${top?`Nearest: ${top.name} ${top.distanceMi}mi away.`:""}`);
+                      return new Set([...fired,"15"]);
+                    } else if(newFuel<=30&&!fired.has("30")){
+                      sendNotif("⚠️ WiseRoute: Fill Up Soon",`${Math.round(newFuel)}% fuel remaining (~${Math.round(newFuel*ts/100*mpg)} miles). Start looking for a station.`);
+                      return new Set([...fired,"30"]);
+                    } else if(newFuel<=50&&!fired.has("50")){
+                      sendNotif("💡 WiseRoute: Half Tank",`You're at 50% fuel. ${top?`Best nearby: ${top.name} at ${gasPrices[top.id]?"$"+gasPrices[top.id]+"/gal":"price TBD"}.`:""}`);
+                      return new Set([...fired,"50"]);
+                    }
+                    return fired;
+                  });
+                  return newFuel;
+                });
+                return newMiles;
+              });
+            }
+          }
+          return{lat,lng};
+        });
+        // Refresh stations when moved more than 2 miles
+        setMilesDriven(m=>{
+          if(m>0&&m%2<0.05) loadStations(lat,lng);
+          return m;
+        });
+      },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+    };
+
+    const stopTracking=()=>{
+      if(watchRef.current)navigator.geolocation.clearWatch(watchRef.current);
+      setTracking(false);
+      setAlerts(a=>[...a,"⏹ Tracking paused."]);
+    };
+
     const getDriveAi=async()=>{
       setDriveAiLoading(true);setDriveAi("");
-      const tip=await askClaudeAI(`WiseRoute Drive AI: ${simFuel.toFixed(0)}% fuel (~${milesNow} miles range), driven ${milesDriven.toFixed(1)} miles. ${top?`Best nearby: ${top.name}, ${top.distanceMi}mi, ${gasPrices[top.id]?"$"+gasPrices[top.id]+"/gal":"price unknown"}`:"no stations loaded"}. 2 sentences: stop now or keep going?`);
+      const tip=await askClaudeAI(`WiseRoute Drive AI: ${currentFuel.toFixed(0)}% fuel (~${milesNow||"?"} miles range), driven ${milesDriven.toFixed(1)} miles. ${top?`Best nearby: ${top.name}, ${top.distanceMi}mi, ${gasPrices[top.id]?"$"+gasPrices[top.id]+"/gal":"price unknown"}`:"no stations loaded"}. 2 sentences: should they stop now or keep going?`);
       setDriveAi(tip);setDriveAiLoading(false);
     };
+
+    const openInMaps=(station)=>{
+      const addr=encodeURIComponent(station.address||station.name);
+      window.open(`maps://maps.apple.com/?daddr=${addr}&dirflg=d`,"_blank");
+    };
+
     return(
       <div>
         <div style={{fontSize:20,fontWeight:900,marginBottom:4}}>Drive Mode</div>
-        <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Real-time fuel tracking. No destination needed.</div>
-        <div style={{background:urg.bg,border:`1px solid ${urg.col}44`,borderRadius:16,padding:16,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{fontSize:28}}>{urg.icon}</span><div><div style={{fontWeight:800,fontSize:17,color:urg.col}}>{urg.label}</div><div style={{fontSize:12,color:C.sub}}>~{milesNow} mi · {gallonsNow.toFixed(1)} gal left</div></div></div>
-          <FuelBar p={simFuel}/>
+        <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Live GPS fuel tracking + smart alerts. Use Apple Maps for navigation.</div>
+
+        {/* Notification permission */}
+        {!notifAllowed&&(
+          <div style={{background:"linear-gradient(135deg,#1A1200,#0A1820)",border:`1px solid ${C.yellow}44`,borderRadius:14,padding:14,marginBottom:14}}>
+            <div style={{fontWeight:700,color:C.yellow,marginBottom:6}}>🔔 Enable Fuel Alerts</div>
+            <div style={{fontSize:13,color:C.sub,marginBottom:12}}>Get notified at 50%, 30%, and 15% fuel so you never get stranded.</div>
+            <button onClick={requestNotifs} style={{width:"100%",background:C.yellow+"22",border:`1px solid ${C.yellow}44`,borderRadius:10,padding:"11px",color:C.yellow,fontSize:13,fontWeight:700,cursor:"pointer"}}>🔔 Enable Notifications</button>
+          </div>
+        )}
+
+        {/* Live fuel gauge */}
+        <div style={{background:urg2.bg,border:`1px solid ${urg2.col}44`,borderRadius:16,padding:16,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <span style={{fontSize:28}}>{urg2.icon}</span>
+            <div>
+              <div style={{fontWeight:800,fontSize:17,color:urg2.col}}>{urg2.label}</div>
+              <div style={{fontSize:12,color:C.sub}}>{milesNow?`~${milesNow} mi range · `:""}{""+currentFuel.toFixed(1)}% fuel · {gallonsNow.toFixed(1)} gal</div>
+            </div>
+            {tracking&&<div style={{marginLeft:"auto",width:10,height:10,borderRadius:"50%",background:C.green,boxShadow:`0 0 8px ${C.green}`,animation:"pulse 1.5s infinite"}}/>}
+          </div>
+          <FuelBar p={currentFuel}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
-            {[[`~${milesNow}`,"Miles left"],[`${gallonsNow.toFixed(1)}`,"Gals left"],[`${milesDriven}`,"Miles driven"]].map(([v,l])=>(
-              <div key={l} style={{textAlign:"center",background:"#00000030",borderRadius:10,padding:"8px 4px"}}><div style={{fontSize:17,fontWeight:800}}>{v}</div><div style={{fontSize:10,color:C.muted}}>{l}</div></div>
+            {[[milesNow?`~${milesNow}`:"?","Mi range"],[gallonsNow.toFixed(1),"Gals left"],[milesDriven.toFixed(1),"Mi driven"]].map(([v,l])=>(
+              <div key={l} style={{textAlign:"center",background:"#00000030",borderRadius:10,padding:"8px 4px"}}>
+                <div style={{fontSize:17,fontWeight:800}}>{v}</div>
+                <div style={{fontSize:10,color:C.muted}}>{l}</div>
+              </div>
             ))}
           </div>
         </div>
+
+        {/* Controls */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-          <button onClick={()=>setDriving(true)} disabled={driving||simFuel<=0} style={{background:driving?"#0A2818":C.green+"22",border:`1px solid ${C.green}44`,borderRadius:12,padding:"13px",color:C.green,fontSize:14,fontWeight:700,cursor:driving?"default":"pointer",opacity:driving?.5:1}}>{driving?"🟢 Driving…":"▶ Start Drive"}</button>
-          <button onClick={()=>setDriving(false)} disabled={!driving} style={{background:!driving?"#0A0F1C":C.red+"22",border:`1px solid ${C.red}44`,borderRadius:12,padding:"13px",color:C.red,fontSize:14,fontWeight:700,cursor:!driving?"default":"pointer",opacity:!driving?.4:1}}>⏹ Pause</button>
+          <button onClick={startTracking} disabled={tracking} style={{background:tracking?"#0A2818":C.green+"22",border:`1px solid ${C.green}44`,borderRadius:12,padding:"13px",color:C.green,fontSize:14,fontWeight:700,cursor:tracking?"default":"pointer",opacity:tracking?.6:1}}>{tracking?"🟢 Tracking…":"▶ Start Tracking"}</button>
+          <button onClick={stopTracking} disabled={!tracking} style={{background:!tracking?"#0A0F1C":C.red+"22",border:`1px solid ${C.red}44`,borderRadius:12,padding:"13px",color:C.red,fontSize:14,fontWeight:700,cursor:!tracking?"default":"pointer",opacity:!tracking?.4:1}}>⏹ Pause</button>
         </div>
         <div style={{display:"flex",gap:8,marginBottom:14}}>
-          <button onClick={()=>{setSimFuel(fuelPct);setMilesDriven(0);setDriving(false);setDriveAi("");}} style={{flex:1,background:"none",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px",color:C.muted,fontSize:12,cursor:"pointer"}}>↺ Reset</button>
-          <button onClick={()=>setSimFuel(f=>Math.min(100,+(f+25).toFixed(0)))} style={{flex:1,background:"none",border:`1px solid ${C.accent}44`,borderRadius:10,padding:"8px",color:"#60A5FA",fontSize:12,cursor:"pointer"}}>⛽ Simulate Fill-Up</button>
+          <button onClick={()=>{setCurrentFuel(fuelPct);setMilesDriven(0);setAlertsFired(new Set());setDriveAi("");setAlerts([]);}} style={{flex:1,background:"none",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px",color:C.muted,fontSize:12,cursor:"pointer"}}>↺ Reset</button>
+          <button onClick={()=>{setCurrentFuel(f=>Math.min(100,+(f+25).toFixed(0)));setAlertsFired(new Set());}} style={{flex:1,background:"none",border:`1px solid ${C.accent}44`,borderRadius:10,padding:"8px",color:"#60A5FA",fontSize:12,cursor:"pointer"}}>⛽ Filled Up</button>
         </div>
+
+        {/* Best nearby station with Apple Maps button */}
         {top&&(
-          <div style={{background:"linear-gradient(135deg,#0A2030,#0A2010)",border:`1px solid ${urg.col}55`,borderRadius:16,padding:16,marginBottom:14}}>
-            <div style={{fontWeight:800,fontSize:13,color:urg.col,marginBottom:8}}>{urgency==="now"?"🚨 Stop Here Now →":urgency==="soon"?"⚠️ Recommended Stop":"⛽ Best Nearby"}</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-              <div><div style={{fontWeight:700,fontSize:15}}>{top.name}</div><div style={{fontSize:12,color:C.muted}}>{top.distanceMi} mi away</div>{top.rating&&<div style={{fontSize:12,color:C.yellow}}>★ {top.rating}</div>}</div>
-              <div style={{textAlign:"right"}}>{gasPrices[top.id]?<><div style={{fontSize:22,fontWeight:900,color:C.green}}>${gasPrices[top.id].toFixed(2)}</div><div style={{fontSize:10,color:C.muted}}>/gal · live</div></>:<div style={{fontSize:12,color:C.muted}}>Price TBD</div>}</div>
+          <div style={{background:"linear-gradient(135deg,#0A2030,#0A2010)",border:`1px solid ${urg2.col}55`,borderRadius:16,padding:16,marginBottom:14}}>
+            <div style={{fontWeight:800,fontSize:13,color:urg2.col,marginBottom:8}}>
+              {urgency==="now"?"🚨 Stop Here Now":urgency==="soon"?"⚠️ Recommended Stop":"⛽ Best Nearby Station"}
             </div>
-            <button onClick={()=>{setNavDest(top.address||top.name);setNavActive(false);setNavRoute(null);setScreen("nav");}} style={{width:"100%",background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:10,padding:"10px",color:C.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>🗺️ Navigate with WiseRoute</button>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:15}}>{top.name}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{top.distanceMi} mi away</div>
+                <div style={{fontSize:12,color:C.muted}}>{top.address?.split(",")[0]}</div>
+                {top.rating&&<div style={{fontSize:12,color:C.yellow,marginTop:2}}>★ {top.rating} ({top.reviewCount} reviews)</div>}
+              </div>
+              <div style={{textAlign:"right"}}>
+                {gasPrices[top.id]?<><div style={{fontSize:22,fontWeight:900,color:C.green}}>${gasPrices[top.id].toFixed(2)}</div><div style={{fontSize:10,color:C.muted}}>/gal · live</div></>:<div style={{fontSize:12,color:C.muted}}>Price TBD</div>}
+              </div>
+            </div>
+            <a href={`maps://maps.apple.com/?daddr=${encodeURIComponent(top.address||top.name)}&dirflg=d`} style={{textDecoration:"none",display:"block"}}>
+              <button style={{width:"100%",background:"linear-gradient(135deg,#1A3A5C,#1A4A3C)",border:`1px solid ${C.green}66`,borderRadius:10,padding:"12px",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                🗺️ Open in Apple Maps
+              </button>
+            </a>
           </div>
         )}
-        <div style={{background:"linear-gradient(135deg,#081830,#0A1F30)",border:`1px solid #1E4A7F`,borderRadius:14,padding:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span>🤖</span><span style={{fontWeight:700,fontSize:13,color:"#60A5FA"}}>AI Driving Advisor</span><button onClick={getDriveAi} style={{marginLeft:"auto",background:C.accent+"22",border:`1px solid ${C.accent}44`,borderRadius:8,padding:"4px 10px",color:"#60A5FA",fontSize:11,cursor:"pointer"}}>{driveAiLoading?<Spinner/>:"Ask AI"}</button></div>
-          {driveAi?<div style={{fontSize:13,color:"#CBD5E1",lineHeight:1.6}}>{driveAi}</div>:<div style={{fontSize:13,color:C.muted}}>Tap "Ask AI" for a recommendation based on your current fuel level.</div>}
+
+        {/* All nearby sorted */}
+        {sorted.length>0&&(
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.sub,marginBottom:8}}>All Nearby Stations</div>
+            {sorted.slice(0,5).map((s,i)=>(
+              <div key={s.id} style={{background:i===0?C.card:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:12,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:13}}>{s.name}</div>
+                  <div style={{fontSize:11,color:C.muted}}>{s.distanceMi} mi{s.rating?` · ★ ${s.rating}`:""}</div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  {gasPrices[s.id]&&<div style={{fontWeight:800,color:C.green}}>${gasPrices[s.id].toFixed(2)}</div>}
+                  <a href={`maps://maps.apple.com/?daddr=${encodeURIComponent(s.address||s.name)}&dirflg=d`} style={{textDecoration:"none"}}>
+                    <button style={{background:C.accent+"22",border:`1px solid ${C.accent}44`,borderRadius:8,padding:"6px 10px",color:"#60A5FA",fontSize:11,fontWeight:700,cursor:"pointer"}}>Maps</button>
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* AI advisor */}
+        <div style={{background:"linear-gradient(135deg,#081830,#0A1F30)",border:`1px solid #1E4A7F`,borderRadius:14,padding:14,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <span>🤖</span><span style={{fontWeight:700,fontSize:13,color:"#60A5FA"}}>AI Fuel Advisor</span>
+            <button onClick={getDriveAi} style={{marginLeft:"auto",background:C.accent+"22",border:`1px solid ${C.accent}44`,borderRadius:8,padding:"4px 10px",color:"#60A5FA",fontSize:11,cursor:"pointer"}}>{driveAiLoading?<Spinner/>:"Ask AI"}</button>
+          </div>
+          {driveAi?<div style={{fontSize:13,color:"#CBD5E1",lineHeight:1.6}}>{driveAi}</div>:<div style={{fontSize:13,color:C.muted}}>Tap "Ask AI" for advice based on your current fuel and nearby stations.</div>}
         </div>
+
+        {/* Alert log */}
+        {alerts.length>0&&(
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:C.sub,marginBottom:8}}>🔔 Alert History</div>
+            {alerts.slice(0,5).map((a,i)=>(
+              <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
+                {typeof a==="string"?<div style={{fontSize:12,color:C.sub}}>{a}</div>:<><div style={{fontSize:12,fontWeight:700}}>{a.title}</div><div style={{fontSize:11,color:C.muted}}>{a.body}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{a.time}</div></>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
       </div>
     );
   }
