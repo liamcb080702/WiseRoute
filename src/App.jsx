@@ -770,11 +770,11 @@ export default function WiseRoute(){
     setStLoading(true);setStations([]);
     try{
       const found=await findNearbyStations(lat,lng);
-      setStations(found);
+      // First pass: collect live prices from Google
       const livePrices={};
       found.forEach(s=>{if(s.livePrice)livePrices[s.id]=s.livePrice;});
       if(Object.keys(livePrices).length>0)setGasPrices(p=>({...p,...livePrices}));
-      // AI prices for stations missing prices
+      // Try AI price lookup for stations without a live Google price
       const missing=found.slice(0,8).filter(s=>!s.livePrice);
       if(missing.length>0){
         setPriceLoading(true);
@@ -786,6 +786,13 @@ export default function WiseRoute(){
         });
         setGasPrices(p=>({...p,...mapped}));
         setPriceLoading(false);
+        // Only show stations that have a price from either source
+        const allPrices={...livePrices,...mapped};
+        const withPrices=found.filter(s=>allPrices[s.id]);
+        setStations(withPrices);
+      } else {
+        // Only show stations that had live Google prices
+        setStations(found.filter(s=>s.livePrice));
       }
     }catch(e){setLocError("Could not load stations: "+e.message);}
     setStLoading(false);
@@ -796,7 +803,10 @@ export default function WiseRoute(){
 
 
   const scoreS=s=>(3.60-(gasPrices[s.id]||3.50))*25+(s.rating||3)*8-s.distanceMi*1.5;
-  const sorted=[...stations].sort((a,b)=>sortBy==="price"?(gasPrices[a.id]||99)-(gasPrices[b.id]||99):sortBy==="rating"?(b.rating||0)-(a.rating||0):scoreS(b)-scoreS(a));
+  // Only show stations with a confirmed price — filters out stores/non-stations
+  const sorted=[...stations]
+    .filter(s=>gasPrices[s.id])
+    .sort((a,b)=>sortBy==="price"?(gasPrices[a.id]||99)-(gasPrices[b.id]||99):sortBy==="rating"?(b.rating||0)-(a.rating||0):scoreS(b)-scoreS(a));
   const urgency=fuelPct<=15?"now":fuelPct<=30?"soon":"ok";
   const U={ok:{col:C.green,bg:"#0A2818",label:"Range OK",icon:"✅"},soon:{col:C.yellow,bg:"#1A1200",label:"Fill Up Soon",icon:"⚠️"},now:{col:C.red,bg:"#1A0800",label:"Fill Up NOW",icon:"🚨"}};
   const urg=U[urgency];
