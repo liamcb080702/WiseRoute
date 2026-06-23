@@ -2,7 +2,7 @@
 // Uses free OpenStreetMap services - no API key needed for geocoding/routing
 // Keeps Google Places (New) for gas stations only
 
-const GOOGLE_KEY = "AIzaSyCF5XDID4MtZ199ckkSS02HYekWtVz4uSg";
+const GOOGLE_KEY = "AIzaSyA29HoYVvc81cEe_nQvegWdfJ0hBHFtReQ";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
