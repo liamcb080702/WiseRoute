@@ -646,9 +646,17 @@ const SEL={width:"100%",background:"#060A14",border:`1px solid ${C.border}`,bord
 // ── API HELPERS ───────────────────────────────────────
 async function reverseGeocode(lat,lng){
   try{
-    const d = await proxyPost("reversegeocode", { lat, lng });
-    return d.city || "Your location";
-  }catch{ return "Your location"; }
+    const r=await fetch("https://places.googleapis.com/v1/places:searchNearby",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Goog-Api-Key":GOOGLE_API_KEY,"X-Goog-FieldMask":"places.formattedAddress,places.location"},
+      body:JSON.stringify({maxResultCount:1,locationRestriction:{circle:{center:{latitude:lat,longitude:lng},radius:100}}})
+    });
+    const d=await r.json();
+    const addr=(d.places?.[0]?.formattedAddress||"").split(",");
+    const city=addr[addr.length-3]?.trim()||"Your location";
+    const state=addr[addr.length-2]?.trim()||"";
+    return `${city}${state?", "+state:""}`;
+  }catch{return "Your location";}
 }
 
 const PROXY = "/api/maps";
@@ -665,13 +673,21 @@ async function proxyPost(action, body){
 }
 
 async function findNearbyStations(lat,lng){
-  const r=await fetch(`${PROXY}?action=nearbystations`,{
+  const r=await fetch("https://places.googleapis.com/v1/places:searchNearby",{
     method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({lat,lng})
+    headers:{
+      "Content-Type":"application/json",
+      "X-Goog-Api-Key":GOOGLE_API_KEY,
+      "X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.fuelOptions"
+    },
+    body:JSON.stringify({
+      includedTypes:["gas_station"],
+      maxResultCount:15,
+      locationRestriction:{circle:{center:{latitude:lat,longitude:lng},radius:50000}}
+    })
   });
   const d=await r.json();
-  if(d.error)throw new Error(d.error);
+  if(d.error)throw new Error(d.error.message);
   return (d.places||[]).map(p=>{
     const pLat=p.location.latitude,pLng=p.location.longitude;
     const distMi=Math.sqrt(Math.pow(pLat-lat,2)+Math.pow(pLng-lng,2))*69;
