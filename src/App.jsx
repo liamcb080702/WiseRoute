@@ -653,9 +653,6 @@ async function reverseGeocode(lat,lng){
 
 const PROXY = "/api/maps";
 
-// Simple proxy-based helpers — all routing through Vercel serverless
-// Uses OpenStreetMap (free) for geocoding/routing, Google Places for stations
-
 async function proxyPost(action, body){
   const r = await fetch(`${PROXY}?action=${action}`, {
     method: "POST",
@@ -665,14 +662,6 @@ async function proxyPost(action, body){
   const d = await r.json();
   if (d.error) throw new Error(d.error);
   return d;
-}
-
-async function geocodeAddress(address){
-  return await proxyPost("geocode", { address });
-}
-
-async function getDirections(originLat, originLng, destLat, destLng){
-  return await proxyPost("directions", { originLat, originLng, destLat, destLng });
 }
 
 async function findNearbyStations(lat,lng){
@@ -727,14 +716,14 @@ export default function WiseRoute(){
   const[sortBy,setSortBy]=useState("smart");
   const[expandSt,setExpandSt]=useState(null);
   // Nav
-  const[navDest,setNavDest]=useState("");
-  const[navRoute,setNavRoute]=useState(null);
-  const[navLoading,setNavLoading]=useState(false);
-  const[navActive,setNavActive]=useState(false);
-  const[navStep,setNavStep]=useState(0);
-  const[navAiNote,setNavAiNote]=useState("");
-  const[navSuggestStop,setNavSuggestStop]=useState(null);
-  const[navError,setNavError]=useState("");
+
+
+
+
+
+
+
+
   // Drive
   const[driving,setDriving]=useState(false);
   const[simFuel,setSimFuel]=useState(60);
@@ -796,172 +785,6 @@ export default function WiseRoute(){
   const U={ok:{col:C.green,bg:"#0A2818",label:"Range OK",icon:"✅"},soon:{col:C.yellow,bg:"#1A1200",label:"Fill Up Soon",icon:"⚠️"},now:{col:C.red,bg:"#1A0800",label:"Fill Up NOW",icon:"🚨"}};
   const urg=U[urgency];
 
-  // ══ NAV SCREEN — with Places Autocomplete ════════════
-  function NavScreen(){
-    const[inputVal,setInputVal]=useState(navDest||"");
-    const[suggestions,setSuggestions]=useState([]);
-    const[sugLoading,setSugLoading]=useState(false);
-    const[loading,setLoading]=useState(false);
-    const[err,setErr]=useState("");
-    const[showSuggestions,setShowSuggestions]=useState(false);
-    const debounceRef=useRef(null);
-
-    // Autocomplete via proxy (OpenStreetMap Photon) — free, no key needed
-    const fetchSuggestions=async(val)=>{
-      if(!val||val.length<2){setSuggestions([]);return;}
-      setSugLoading(true);
-      try{
-        const d = await proxyPost("autocomplete", { input: val, lat: location?.lat, lng: location?.lng });
-        setSuggestions(d.predictions || []);
-      }catch(e){ setSuggestions([]); }
-      setSugLoading(false);
-    };
-
-    const handleInput=(val)=>{
-      setInputVal(val);
-      setShowSuggestions(true);
-      if(debounceRef.current)clearTimeout(debounceRef.current);
-      debounceRef.current=setTimeout(()=>fetchSuggestions(val),350);
-    };
-
-    const selectSuggestion=(desc)=>{
-      setInputVal(desc);
-      setSuggestions([]);
-      setShowSuggestions(false);
-    };
-
-    const startNav=async(destOverride)=>{
-      const d=destOverride||inputVal;
-      if(!d.trim()){setErr("Please enter a destination.");return;}
-      if(!location){setErr("Enable location first on the Home screen.");return;}
-      setLoading(true);setErr("");setSuggestions([]);setShowSuggestions(false);
-      try{
-        const destCoords=await geocodeAddress(d);
-        const route=await getDirections(location.lat,location.lng,destCoords.lat,destCoords.lng);
-        const totalMi=route.totalMiles;
-        const canMakeIt=milesLeft&&milesLeft>totalMi;
-        const vDesc=vehicle?`${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.mpg||"electric"} MPG, ${ts}gal)`:"unknown vehicle";
-        const aiNote=await askClaudeAI(`WiseRoute navigation. Driver: ${vDesc}, ${fuelPct}% fuel (~${milesLeft||"?"} miles range). Route: ${location.city} to ${destCoords.formatted}, ${totalMi} miles. ${canMakeIt?"Enough fuel to make it — give 1 sentence tip on whether to top off first.":"Not enough fuel — give 1 sentence on where to stop."}`);
-        let suggestStop=null;
-        if(!canMakeIt&&stations.length>0)suggestStop=[...stations].sort((a,b)=>scoreS(b)-scoreS(a))[0];
-        setNavDest(d);
-        setNavRoute({...route,destName:destCoords.formatted});
-        setNavAiNote(aiNote);
-        setNavSuggestStop(suggestStop);
-        setNavStep(0);
-        setNavActive(true);
-      }catch(e){setErr("Could not find that location. Try a more specific address.");}
-      setLoading(false);
-    };
-
-    // Active navigation view
-    if(navActive&&navRoute){
-      return(
-        <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <div><div style={{fontSize:20,fontWeight:900}}>Navigating</div><div style={{fontSize:12,color:C.muted,marginTop:2,maxWidth:260}}>{navRoute.destName}</div></div>
-            <button onClick={()=>{setNavActive(false);setNavRoute(null);setNavDest("");setInputVal("");}} style={{background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:10,padding:"8px 14px",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>✕ End</button>
-          </div>
-          <div style={{background:"linear-gradient(135deg,#0A2040,#081830)",border:`1px solid ${C.accent}44`,borderRadius:16,padding:16,marginBottom:14}}>
-            <div style={{display:"flex",gap:20,marginBottom:10}}>
-              <div><div style={{fontSize:22,fontWeight:900,color:"#60A5FA"}}>{navRoute.totalMiles} mi</div><div style={{fontSize:11,color:C.muted}}>distance</div></div>
-              <div><div style={{fontSize:22,fontWeight:900,color:C.teal}}>{navRoute.totalTime}</div><div style={{fontSize:11,color:C.muted}}>est. time</div></div>
-              {milesLeft&&<div><div style={{fontSize:22,fontWeight:900,color:milesLeft>navRoute.totalMiles?C.green:C.red}}>~{milesLeft} mi</div><div style={{fontSize:11,color:C.muted}}>fuel range</div></div>}
-            </div>
-            <FuelBar p={fuelPct}/>
-            <div style={{fontSize:12,color:milesLeft&&milesLeft>navRoute.totalMiles?C.green:C.red,marginTop:4,fontWeight:600}}>
-              {milesLeft&&milesLeft>navRoute.totalMiles?"✓ Enough fuel to reach destination":"⚠️ Not enough fuel — stop recommended"}
-            </div>
-          </div>
-          {navAiNote&&<div style={{background:"linear-gradient(135deg,#081830,#0A2020)",border:`1px solid #1E4A7F`,borderRadius:14,padding:14,marginBottom:14}}><div style={{display:"flex",gap:8,marginBottom:6}}><span>🤖</span><span style={{fontWeight:700,fontSize:13,color:"#60A5FA"}}>AI Fuel Analysis</span></div><div style={{fontSize:13,color:"#CBD5E1",lineHeight:1.6}}>{navAiNote}</div></div>}
-          {navSuggestStop&&<div style={{background:"linear-gradient(135deg,#1A0A00,#1A1200)",border:`1px solid ${C.yellow}44`,borderRadius:14,padding:14,marginBottom:14}}><div style={{fontWeight:700,color:C.yellow,marginBottom:8}}>⚠️ Recommended Fuel Stop</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700}}>{navSuggestStop.name}</div><div style={{fontSize:12,color:C.muted}}>{navSuggestStop.distanceMi} mi</div></div>{gasPrices[navSuggestStop.id]&&<div style={{fontSize:20,fontWeight:900,color:C.green}}>${gasPrices[navSuggestStop.id].toFixed(2)}</div>}</div></div>}
-          {navRoute.steps[navStep]&&(
-            <div style={{background:C.card,border:`2px solid ${C.accent}`,borderRadius:16,padding:18,marginBottom:10}}>
-              <div style={{fontSize:11,color:C.muted,marginBottom:4}}>STEP {navStep+1} OF {navRoute.steps.length}</div>
-              <div style={{fontSize:18,fontWeight:800,marginBottom:8,lineHeight:1.3}}>{navRoute.steps[navStep].instruction}</div>
-              <div style={{fontSize:13,color:C.muted}}>{navRoute.steps[navStep].distance} · {navRoute.steps[navStep].duration}</div>
-            </div>
-          )}
-          <div style={{display:"flex",gap:8,marginBottom:14}}>
-            <button onClick={()=>setNavStep(s=>Math.max(0,s-1))} disabled={navStep===0} style={{flex:1,background:C.muted+"22",border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",color:C.muted,fontSize:13,fontWeight:700,cursor:"pointer",opacity:navStep===0?.4:1}}>← Back</button>
-            <button onClick={()=>setNavStep(s=>Math.min(navRoute.steps.length-1,s+1))} disabled={navStep>=navRoute.steps.length-1} style={{flex:1,background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:12,padding:"12px",color:C.green,fontSize:13,fontWeight:700,cursor:"pointer",opacity:navStep>=navRoute.steps.length-1?.4:1}}>Next →</button>
-          </div>
-          <Card>
-            <Sec t="All Steps"/>
-            <div style={{maxHeight:280,overflowY:"auto"}}>
-              {navRoute.steps.map((step,i)=>(
-                <div key={i} onClick={()=>setNavStep(i)} style={{display:"flex",gap:12,padding:"10px 16px",margin:"0 -16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i===navStep?"#1A2F50":"transparent"}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",background:i===navStep?C.accent:i<navStep?C.green+"44":C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:i===navStep?"#fff":i<navStep?C.green:C.muted,flexShrink:0}}>{i<navStep?"✓":i+1}</div>
-                  <div><div style={{fontSize:13,fontWeight:i===navStep?700:400,lineHeight:1.4}}>{step.instruction}</div><div style={{fontSize:11,color:C.muted}}>{step.distance} · {step.duration}</div></div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      );
-    }
-
-    // Destination search with autocomplete
-    return(
-      <div>
-        <div style={{fontSize:20,fontWeight:900,marginBottom:4}}>AI Navigation</div>
-        <div style={{fontSize:13,color:C.muted,marginBottom:16}}>Smart routing that adapts to your fuel level.</div>
-        <Card style={{overflow:"visible",position:"relative",zIndex:20}}>
-          <Sec t="Where are you going?"/>
-          {/* Autocomplete input */}
-          <div style={{position:"relative",marginBottom:showSuggestions&&suggestions.length>0?0:12}}>
-            <input
-              type="search"
-              value={inputVal}
-              placeholder="Search city, address, or place…"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="on"
-              spellCheck="false"
-              onChange={e=>handleInput(e.target.value)}
-              onFocus={()=>inputVal.length>1&&setShowSuggestions(true)}
-              onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();startNav();}}}
-              style={{width:"100%",background:"#060A14",border:`2px solid ${C.accent}`,borderRadius:suggestions.length>0&&showSuggestions?"10px 10px 0 0":"10px",padding:"14px 42px 14px 14px",color:C.text,fontSize:16,outline:"none",boxSizing:"border-box"}}
-            />
-            {sugLoading&&<div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)"}}><Spinner/></div>}
-            {inputVal&&!sugLoading&&<button onClick={()=>{setInputVal("");setSuggestions([]);setShowSuggestions(false);}} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer",padding:"4px"}}>✕</button>}
-          </div>
-          {/* Suggestions dropdown */}
-          {showSuggestions&&suggestions.length>0&&(
-            <div style={{background:"#060A14",border:`1px solid ${C.accent}`,borderTop:"none",borderRadius:"0 0 10px 10px",marginBottom:12,maxHeight:220,overflowY:"auto"}}>
-              {suggestions.map((s,i)=>(
-                <div key={i} onClick={()=>{selectSuggestion(s.description);startNav(s.description);}} style={{padding:"12px 14px",borderBottom:i<suggestions.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>
-                  <span style={{fontSize:16,marginTop:1}}>📍</span>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.structured_formatting?.main_text||s.description.split(",")[0]}</div>
-                    <div style={{fontSize:11,color:C.muted,marginTop:2}}>{s.structured_formatting?.secondary_text||s.description.split(",").slice(1).join(",").trim()}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {vehicle&&<div style={{fontSize:12,color:C.muted,marginBottom:12,padding:"8px 12px",background:"#ffffff08",borderRadius:8}}>{vehicle.year} {vehicle.make} {vehicle.model} · {fuelPct}% fuel{milesLeft?` · ~${milesLeft} mi range`:""}</div>}
-          {!location&&<div style={{fontSize:12,color:C.yellow,marginBottom:12,padding:"8px 12px",background:C.yellow+"18",borderRadius:8}}>⚠️ Enable location on the Home screen first</div>}
-          {err&&<div style={{fontSize:11,color:C.red,marginBottom:12,padding:"8px 12px",background:C.red+"18",borderRadius:8,lineHeight:1.5}}>{err}</div>}
-          <Btn onClick={()=>startNav()} disabled={loading||!location||!inputVal.trim()}>{loading?"Planning route…":"Start Navigation →"}</Btn>
-        </Card>
-
-        {/* Gas station quick nav */}
-        {sorted.length>0&&(
-          <Card>
-            <Sec t="Navigate to a Gas Station"/>
-            {sorted.slice(0,5).map(s=>(
-              <div key={s.id} onClick={()=>startNav(s.address||s.name)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
-                <div><div style={{fontWeight:600,fontSize:13}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.distanceMi} mi · {(s.address||"").split(",")[0]}</div></div>
-                <div style={{textAlign:"right"}}>{gasPrices[s.id]?<div style={{fontWeight:800,color:C.green}}>${gasPrices[s.id].toFixed(2)}</div>:priceLoading?<Spinner/>:null}<div style={{fontSize:10,color:C.muted}}>/gal</div></div>
-              </div>
-            ))}
-          </Card>
-        )}
-      </div>
-    );
-  }
-
   // ══ HOME SCREEN ════════════════════════════════════════
   function HomeScreen(){
     return(
@@ -973,7 +796,7 @@ export default function WiseRoute(){
           <div style={{fontSize:13,color:C.sub,marginBottom:18}}>{location?`📍 ${location.city} · ${stations.length} stations found`:"Tap below to find gas stations near you"}</div>
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={()=>{if(!location)getLocation();else setScreen("nearby");}} disabled={locLoading} style={{flex:1,padding:"11px 12px",fontSize:13}}>{locLoading?"Getting location…":location?"View Stations →":"📍 Find Stations"}</Btn>
-            <Btn onClick={()=>setScreen("nav")} outline style={{flex:1,padding:"11px 12px",fontSize:13}}>🗺️ Navigate</Btn>
+  
           </div>
           {locError&&<div style={{marginTop:10,fontSize:12,color:C.red,background:C.red+"18",padding:"8px",borderRadius:8}}>{locError}</div>}
         </div>
@@ -1360,7 +1183,7 @@ export default function WiseRoute(){
     );
   }
 
-  const NAV=[{id:"home",label:"Home",icon:"🏠"},{id:"nearby",label:"Near Me",icon:"📍"},{id:"nav",label:"Navigate",icon:"🗺️"},{id:"drive",label:"Drive",icon:"🛣️"},{id:"setup",label:"My Car",icon:"🚗"}];
+  const NAV=[{id:"home",label:"Home",icon:"🏠"},{id:"nearby",label:"Near Me",icon:"📍"},{id:"drive",label:"Drive",icon:"🛣️"},{id:"setup",label:"My Car",icon:"🚗"}];
 
   return(
     <div style={{fontFamily:"'Inter',-apple-system,sans-serif",background:C.bg,minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",overflowX:"hidden"}}>
@@ -1378,7 +1201,6 @@ export default function WiseRoute(){
       <div style={{padding:"18px 14px 90px"}}>
         {screen==="home"  &&<HomeScreen/>}
         {screen==="nearby"&&<NearbyScreen/>}
-        {screen==="nav"   &&<NavScreen/>}
         {screen==="drive" &&<DriveScreen/>}
         {screen==="setup" &&<SetupScreen/>}
       </div>
